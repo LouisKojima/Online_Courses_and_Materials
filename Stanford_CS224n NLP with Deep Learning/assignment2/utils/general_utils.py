@@ -31,14 +31,24 @@ def get_minibatches(data, minibatch_size, shuffle=True):
 
     """
     list_data = type(data) is list and (type(data[0]) is list or type(data[0]) is np.ndarray)
+    #To test whether the input data is a list of lists/arrays or not
     data_size = len(data[0]) if list_data else len(data)
+    #To meansure the length of 1st list in the list of lists, or to measure the length of the list of data.
     indices = np.arange(data_size)
     if shuffle:
         np.random.shuffle(indices)
     for minibatch_start in np.arange(0, data_size, minibatch_size):
         minibatch_indices = indices[minibatch_start:minibatch_start + minibatch_size]
+        #minibatch_indices is still to calculate the indices for the mini-batch
         yield [_minibatch(d, minibatch_indices) for d in data] if list_data \
-            else _minibatch(data, minibatch_indices)
+            else _minibatch(data, minibatch_indices) # so _minibatch is another funtion defined as below - -
+'''
+---------Grammar on 'yield' expression----------
+yield is a keyword that is used like return, except the function will return a generator.
+Generators are iterators, a kind of iterable you can only iterate over once. 
+Generators do not store all the values in memory, they generate the values on the fly.
+'''
+
 
 
 def _minibatch(data, minibatch_idx):
@@ -52,4 +62,4 @@ def test_all_close(name, actual, expected):
     if np.amax(np.fabs(actual - expected)) > 1e-6:
         raise ValueError("{:} failed, expected {:} but value is {:}".format(name, expected, actual))
     else:
-        print name, "passed!"
+        print (name, "passed!")

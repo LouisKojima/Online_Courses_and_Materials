@@ -10,3 +10,7 @@ Best, Hansen
 
 
 For the first part of the lecture content, is about using vectors to describe the words, I used Ch.15&16 in the *Speech and Language Processing*  as a reference to get better understanding.
+
+
+
+The available video version on the Youtube is 17 Fall, while the latest course material is on 18 Spring. The contents are basically the same but with a little bit different arranging order.

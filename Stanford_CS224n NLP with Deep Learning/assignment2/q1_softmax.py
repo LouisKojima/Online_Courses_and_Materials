@@ -24,6 +24,10 @@ def softmax(x):
     """
 
     ### YOUR CODE HERE
+    xmax = tf.reduce_max(x)
+    out = tf.exp(x-xmax)
+    out = out/tf.reduce_sum(out, axis=1)
+ 
     ### END YOUR CODE
 
     return out
@@ -54,6 +58,7 @@ def cross_entropy_loss(y, yhat):
     """
 
     ### YOUR CODE HERE
+    out = -tf.reduce_sum(tf.to_float(y) * tf.log(yhat))
     ### END YOUR CODE
 
     return out
@@ -76,7 +81,7 @@ def test_softmax_basic():
             test2 = sess.run(test2)
     test_all_close("Softmax test 2", test2, np.array([[0.73105858, 0.26894142]]))
 
-    print "Basic (non-exhaustive) softmax tests pass\n"
+    print ("Basic (non-exhaustive) softmax tests pass\n")
 
 
 def test_cross_entropy_loss_basic():
@@ -93,8 +98,14 @@ def test_cross_entropy_loss_basic():
     expected = -3 * np.log(.5)
     test_all_close("Cross-entropy test 1", test1, expected)
 
-    print "Basic (non-exhaustive) cross-entropy tests pass"
+    print ("Basic (non-exhaustive) cross-entropy tests pass")
 
 if __name__ == "__main__":
     test_softmax_basic()
     test_cross_entropy_loss_basic()
+'''
+if __name__ == '__main__'的意思是：当.py文件被直接运行时，if __name__ == '__main__'之下的代码块将被运行；
+当.py文件以模块形式被导入时，if __name__ == '__main__'之下的代码块不被运行。
+
+
+'''
