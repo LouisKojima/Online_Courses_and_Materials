@@ -1,14 +1,79 @@
 import pickle
-import os
 import time
-import tensorflow as tf
 
+import os
+import tensorflow as tf
+from tensorflow.contrib.layers import l2_regularizer
 
 from model import Model
 from q2_initialization import xavier_weight_init
-from utils.parser_utils import minibatches, load_and_preprocess_data, Progbar_hand
-from tensorflow.contrib.layers import l2_regularizer
-#from tensorflow.contrib.keras.utils import Progbar
+#from utils.general_utils import Progbar
+from utils.parser_utils import load_and_preprocess_data, minibatches, Progbar
+import sys
+import numpy as np
+
+
+def get_minibatches(data, minibatch_size, shuffle=True):
+    """
+    Iterates through the provided data one minibatch at at time. You can use this function to
+    iterate through data in minibatches as follows:
+
+        for inputs_minibatch in get_minibatches(inputs, minibatch_size):
+            ...
+
+    Or with multiple data sources:
+
+        for inputs_minibatch, labels_minibatch in get_minibatches([inputs, labels], minibatch_size):
+            ...
+
+    Args:
+        data: there are two possible values:
+            - a list or numpy array
+            - a list where each element is either a list or numpy array
+        minibatch_size: the maximum number of items in a minibatch
+        shuffle: whether to randomize the order of returned data
+    Returns:
+        minibatches: the return value depends on data:
+            - If data is a list/array it yields the next minibatch of data.
+            - If data a list of lists/arrays it returns the next minibatch of each element in the
+              list. This can be used to iterate through multiple data sources
+              (e.g., features and labels) at the same time.
+
+    """
+    list_data = type(data) is list and (type(data[0]) is list or type(data[0]) is np.ndarray)
+    data_size = len(data[0]) if list_data else len(data)
+    indices = np.arange(data_size)
+    if shuffle:
+        np.random.shuffle(indices)
+    for minibatch_start in np.arange(0, data_size, minibatch_size):
+        minibatch_indices = indices[minibatch_start:minibatch_start + minibatch_size]
+        yield [minibatch(d, minibatch_indices) for d in data] if list_data \
+            else minibatch(data, minibatch_indices)
+
+
+def minibatch(data, minibatch_idx):
+    return data[minibatch_idx] if type(data) is np.ndarray else [data[i] for i in minibatch_idx]
+
+
+def test_all_close(name, actual, expected):
+    if actual.shape != expected.shape:
+        raise ValueError("{:} failed, expected output to have shape {:} but has shape {:}"
+                         .format(name, expected.shape, actual.shape))
+    if np.amax(np.fabs(actual - expected)) > 1e-6:
+        raise ValueError("{:} failed, expected {:} but value is {:}".format(name, expected, actual))
+    else:
+        print(name, "passed!")
+
+
+def logged_loop(iterable, n=None):
+    if n is None:
+        n = len(iterable)
+    step = max(1, n / 1000)
+    prog = Progbar(n)
+    for i, elem in enumerate(iterable):
+        if i % step == 0 or i == n - 1:
+            prog.update(i + 1)
+        yield elem
 
 
 class Config(object):
@@ -16,12 +81,11 @@ class Config(object):
 
     The config class is used to store various hyperparameters and dataset
     information parameters. Model objects are passed a Config() object at
-    instantiation. They can then call self.config.<hyperparameter_name> to
-    get the hyperparameter settings.
+    instantiation.
     """
     n_features = 36
     n_classes = 3
-    dropout = 0.5  # (p_drop in the handout)
+    dropout = 0.5
     embed_size = 50
     hidden_size = 200
     batch_size = 1024
@@ -58,12 +122,15 @@ class ParserModel(Model):
         (Don't change the variable names)
         """
         ### YOUR CODE HERE
-        self.input_placeholder = tf.placeholder(tf.int32, shape=(None, self.config.n_features))
-        self.labels_placeholder = tf.placeholder(tf.float32, shape=(None, self.config.n_classes))
-        self.dropout_placeholder = tf.placeholder(tf.float32, shape=())
+        self.input_placeholder = tf.placeholder(
+            tf.int32, shape=(None, self.config.n_features))
+        self.labels_placeholder = tf.placeholder(
+            tf.float32, shape=(None, self.config.n_classes))
+        self.dropout_placeholder = tf.placeholder(
+            tf.float32, shape=())
         ### END YOUR CODE
 
-    def create_feed_dict(self, inputs_batch, labels_batch=None, dropout=0):
+    def create_feed_dict(self, inputs_batch, labels_batch=None, dropout=1):
         """Creates the feed_dict for the dependency parser.
 
         A feed_dict takes the form of:
@@ -87,18 +154,19 @@ class ParserModel(Model):
         """
         ### YOUR CODE HERE
         feed_dict = {
-        self.input_placeholder : inputs_batch,
-        self.dropout_placeholder: dropout
+            self.input_placeholder: inputs_batch,
+            self.dropout_placeholder: dropout
         }
         if labels_batch is not None:
             feed_dict[self.labels_placeholder] = labels_batch
-        ### END YOUR CODE
+
+            ### END YOUR CODE
         return feed_dict
 
     def add_embedding(self):
         """Adds an embedding layer that maps from input tokens (integers) to vectors and then
         concatenates those vectors:
-            - Creates a tf.Variable and initializes it with self.pretrained_embeddings.
+            - Creates an embedding tensor and initializes it with self.pretrained_embeddings.
             - Uses the input_placeholder to index into the embeddings tensor, resulting in a
               tensor of shape (None, n_features, embedding_size).
             - Concatenates the embeddings by reshaping the embeddings tensor to shape
@@ -107,7 +175,7 @@ class ParserModel(Model):
         Hint: You might find tf.nn.embedding_lookup useful.
         Hint: You can use tf.reshape to concatenate the vectors. See following link to understand
             what -1 in a shape means.
-            https://www.tensorflow.org/api_docs/python/tf/reshape
+            https://www.tensorflow.org/api_docs/python/array_ops/shapes_and_shaping#reshape.
 
         Returns:
             embeddings: tf.Tensor of shape (None, n_features*embed_size)
@@ -132,9 +200,13 @@ class ParserModel(Model):
         Use the initializer from q2_initialization.py to initialize W and U (you can initialize b1
         and b2 with zeros)
 
+        Hint: Here are the dimensions of the various variables you will need to create
+                    W:  (n_features*embed_size, hidden_size)
+                    b1: (hidden_size,)
+                    U:  (hidden_size, n_classes)
+                    b2: (n_classes)
         Hint: Note that tf.nn.dropout takes the keep probability (1 - p_drop) as an argument.
-              Therefore the keep probability should be set to the value of
-              (1 - self.dropout_placeholder)
+            The keep probability should be set to the value of self.dropout_placeholder
 
         Returns:
             pred: tf.Tensor of shape (batch_size, n_classes)
@@ -150,10 +222,10 @@ class ParserModel(Model):
             name="W",
             regularizer=l2_regularizer(self.config.l2reg))
         b1 = tf.get_variable(
+            name="b1",
             initializer=tf.zeros_initializer,
             shape=self.config.hidden_size,
-            dtype=tf.float32,
-            name="b1")
+            dtype=tf.float32)
         U = tf.get_variable(
             initializer=xavier,
             shape=(self.config.hidden_size, self.config.n_classes),
@@ -161,14 +233,14 @@ class ParserModel(Model):
             name="U",
             regularizer=l2_regularizer(self.config.l2reg))
         b2 = tf.get_variable(
+            name="b2",
             initializer=tf.zeros_initializer,
             shape=self.config.n_classes,
-            dtype=tf.float32,
-            name="b2")
+            dtype=tf.float32)
 
-        h = tf.nn.relu(tf.matmul(x, W) + b1)
+        h = tf.nn.relu(x @ W + b1)
         h_drop = tf.nn.dropout(h, self.dropout_placeholder)
-        pred = tf.matmul(h_drop, U) + b2
+        pred = h_drop @ U + b2
         ### END YOUR CODE
         return pred
 
@@ -186,7 +258,8 @@ class ParserModel(Model):
             loss: A 0-d tensor (scalar)
         """
         ### YOUR CODE HERE
-        errors = tf.nn.softmax_cross_entropy_with_logits(logits = pred, labels = self.labels_placeholder)
+        errors = tf.nn.softmax_cross_entropy_with_logits(
+            logits=pred, labels=self.labels_placeholder)
         reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         loss = tf.reduce_mean(errors) + sum(reg_loss)
         ### END YOUR CODE
@@ -199,12 +272,11 @@ class ParserModel(Model):
         The Op returned by this function is what must be passed to the
         `sess.run()` call to cause the model to train. See
 
-        https://www.tensorflow.org/api_docs/python/tf/train/Optimizer
+        https://www.tensorflow.org/versions/r0.7/api_docs/python/train.html#Optimizer
 
         for more information.
 
         Use tf.train.AdamOptimizer for this model.
-        Use the learning rate from self.config.
         Calling optimizer.minimize() will return a train_op object.
 
         Args:
@@ -213,7 +285,8 @@ class ParserModel(Model):
             train_op: The Op for training.
         """
         ### YOUR CODE HERE
-        train_op = tf.train.AdamOptimizer().minimize(loss)
+        op = tf.train.AdamOptimizer()
+        train_op = op.minimize(loss=loss)
         ### END YOUR CODE
         return train_op
 
@@ -224,32 +297,28 @@ class ParserModel(Model):
         return loss
 
     def run_epoch(self, sess, parser, train_examples, dev_set):
-        n_minibatches = 1 + len(train_examples) / self.config.batch_size
-        prog = Progbar_hand(target=n_minibatches)
-        #prog = tf.keras.utils.Progbar(target = n_minibatches)
-        for i, (train_x, train_y) in enumerate(minibatches(train_examples, self.config.batch_size)):
+        prog = Progbar(target=1 + len(train_examples) / self.config.batch_size)
+        for i, (train_x, train_y) in enumerate(
+                minibatches(train_examples, self.config.batch_size)):
             loss = self.train_on_batch(sess, train_x, train_y)
             prog.update(i + 1, [("train loss", loss)])
-        
-        print('\n')
-        print (80 * "=")
-        print ("Evaluating on dev set",)
-        
+
+        print("\nEvaluating on dev set", end=' ')
         dev_UAS, _ = parser.parse(dev_set)
-        print ("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
+        print("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
         return dev_UAS
 
     def fit(self, sess, saver, parser, train_examples, dev_set):
         best_dev_UAS = 0
         for epoch in range(self.config.n_epochs):
-            print ("Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs))
+            print("Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs))
             dev_UAS = self.run_epoch(sess, parser, train_examples, dev_set)
             if dev_UAS > best_dev_UAS:
                 best_dev_UAS = dev_UAS
                 if saver:
-                    print ("New best dev UAS! Saving model in ./data/weights/parser.weights")
+                    print("New best dev UAS! Saving model in ./data/weights/parser.weights")
                     saver.save(sess, './data/weights/parser.weights')
-            print
+            print()
 
     def __init__(self, config, pretrained_embeddings):
         self.pretrained_embeddings = pretrained_embeddings
@@ -257,49 +326,51 @@ class ParserModel(Model):
         self.build()
 
 
-def main(debug=False):
-    print (80 * "=")
-    print ("INITIALIZING")
-    print (80 * "=")
+def main(debug=True):
+    print(80 * "=")
+    print("INITIALIZING")
+    print(80 * "=")
     config = Config()
     parser, embeddings, train_examples, dev_set, test_set = load_and_preprocess_data(debug)
     if not os.path.exists('./data/weights/'):
         os.makedirs('./data/weights/')
 
-    with tf.Graph().as_default() as graph:
-        print ("Building model...",)
+    with tf.Graph().as_default():
+        print("Building model...", end=' ')
         start = time.time()
         model = ParserModel(config, embeddings)
         parser.model = model
-        init_op = tf.global_variables_initializer()
+        print("took {:.2f} seconds\n".format(time.time() - start))
+
+        init = tf.global_variables_initializer()
+        # If you are using an old version of TensorFlow, you may have to use
+        # this initializer instead.
+        # init = tf.initialize_all_variables()
         saver = None if debug else tf.train.Saver()
-        print( "took {:.2f} seconds\n".format(time.time() - start))
-    graph.finalize()
 
-    with tf.Session(graph=graph) as session:
-        parser.session = session
-        session.run(init_op)
+        with tf.Session() as session:
+            parser.session = session
+            session.run(init)
 
-        print (80 * "=")
-        print ("TRAINING")
-        print (80 * "=")
-        model.fit(session, saver, parser, train_examples, dev_set)
+            print(80 * "=")
+            print("TRAINING")
+            print(80 * "=")
+            model.fit(session, saver, parser, train_examples, dev_set)
 
-        if not debug:
-            print (80 * "=")
-            print ("TESTING")
-            print (80 * "=")
-            print ("Restoring the best model weights found on the dev set")
-            saver.restore(session, './data/weights/parser.weights')
-            print ("Final evaluation on test set",)
-            UAS, dependencies = parser.parse(test_set)
-            print ("- test UAS: {:.2f}".format(UAS * 100.0))
-            print ("Writing predictions")
-            with open('q2_test.predicted.pkl', 'w') as f:
-                pickle.dump(dependencies, f, -1)
-            print ("Done!")
+            if not debug:
+                print(80 * "=")
+                print("TESTING")
+                print(80 * "=")
+                print("Restoring the best model weights found on the dev set")
+                saver.restore(session, './data/weights/parser.weights')
+                print("Final evaluation on test set", end=' ')
+                UAS, dependencies = parser.parse(test_set)
+                print("- test UAS: {:.2f}".format(UAS * 100.0))
+                print("Writing predictions")
+                with open('q2_test.predicted.pkl', 'wb') as f:
+                    pickle.dump(dependencies, f, -1)
+                print("Done!")
 
 
 if __name__ == '__main__':
-    main()
-
+    main(debug=False)

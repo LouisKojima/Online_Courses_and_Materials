@@ -553,7 +553,7 @@ def load_and_preprocess_data(reduced=True):
     test_set = parser.vectorize(test_set)
     print("took {:.2f} seconds".format(time.time() - start))
 
-    print("Preprocessing training data...")
+    print("cessing training data...")
     train_examples = parser.create_instances(train_set)
 
     return parser, embeddings_matrix, train_examples, dev_set, test_set,
