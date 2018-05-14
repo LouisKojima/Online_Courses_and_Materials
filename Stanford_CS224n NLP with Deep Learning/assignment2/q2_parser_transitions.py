@@ -21,7 +21,17 @@ class PartialParse(object):
         self.sentence = sentence
 
         ### YOUR CODE HERE
+        self.stack = ['ROOT']
+        self.buffer = sentence[:]
+        self.dependencies = []
         ### END YOUR CODE
+        '''
+
+        ---------------Tips on the List[:]---------------
+        When reading, list is a reference to the original list, and list[:] shallow-copies the list.
+
+        When assigning, list (re)binds the name and list[:] slice-assigns, replacing what was previously in the list.
+        '''
 
     def parse_step(self, transition):
         """Performs a single parse step by applying the given transition to this partial parse
@@ -32,6 +42,16 @@ class PartialParse(object):
                         transition.
         """
         ### YOUR CODE HERE
+        if transition == 'S' and len(self.buffer) > 0:
+            self.stack.append(self.buffer.pop(0))
+        elif transition == 'LA' and len(self.stack) > 1:
+            dep = (self.stack[-1], self.stack[-2])
+            self.stack.pop(-2)
+            self.dependencies.append(dep)
+        elif transition == 'RA' and len(self.stack) > 1:
+            dep = (self.stack[-2], self.stack[-1])
+            self.stack.pop(-1)
+            self.dependencies.append(dep)
         ### END YOUR CODE
 
     def parse(self, transitions):
@@ -66,8 +86,21 @@ def minibatch_parse(sentences, model, batch_size):
     """
 
     ### YOUR CODE HERE
-    ### END YOUR CODE
+    parsers = [PartialParse(s) for s in sentences]
+    feeder = parsers[:]
 
+    batch = [feeder.pop(0) for _ in range(min(batch_size, len(feeder)))]
+    while feeder or batch:
+        transitions = model.predict(batch)
+        for i, pp in enumerate(batch):
+            pp.parse_step(transitions[i])
+            if len(pp.buffer) == 0 and len(pp.stack) == 1:
+                batch.pop(i)
+                if feeder:
+                    batch.append(feeder.pop(0))
+
+    dependencies = [pp.dependencies for pp in parsers]
+    ### END YOUR CODE
     return dependencies
 
 
@@ -85,7 +118,7 @@ def test_step(name, transition, stack, buf, deps,
         "{:} test resulted in buffer {:}, expected {:}".format(name, buf, ex_buf)
     assert deps == ex_deps, \
         "{:} test resulted in dependency list {:}, expected {:}".format(name, deps, ex_deps)
-    print "{:} test passed!".format(name)
+    print ("{:} test passed!".format(name))
 
 
 def test_parse_step():
@@ -112,7 +145,7 @@ def test_parse():
         "parse test resulted in dependencies {:}, expected {:}".format(dependencies, expected)
     assert tuple(sentence) == ("parse", "this", "sentence"), \
         "parse test failed: the input sentence should not be modified"
-    print "parse test passed!"
+    print ("parse test passed!")
 
 
 class DummyModel(object):
@@ -149,7 +182,7 @@ def test_minibatch_parse():
                       (('only', 'ROOT'), ('only', 'arcs'), ('only', 'left')))
     test_dependencies("minibatch_parse", deps[3],
                       (('again', 'ROOT'), ('again', 'arcs'), ('again', 'left'), ('again', 'only')))
-    print "minibatch_parse test passed!"
+    print ("minibatch_parse test passed!")
 
 if __name__ == '__main__':
     test_parse_step()

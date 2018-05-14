@@ -6,8 +6,8 @@ import time
 import os
 import logging
 from collections import Counter
-from general_utils import get_minibatches
-from q2_parser_transitions import minibatch_parse
+#from not_general_utils import get_minibatches
+#from q2_parser_transitions import minibatch_parse
 
 import numpy as np
 
@@ -18,6 +18,175 @@ UNK = '<UNK>'
 NULL = '<NULL>'
 ROOT = '<ROOT>'
 
+class PartialParse(object):
+    def __init__(self, sentence):
+        """Initializes this partial parse.
+
+        Your code should initialize the following fields:
+            self.stack: The current stack represented as a list with the top of the stack as the
+                        last element of the list.
+            self.buffer: The current buffer represented as a list with the first item on the
+                         buffer as the first item of the list
+            self.dependencies: The list of dependencies produced so far. Represented as a list of
+                    tuples where each tuple is of the form (head, dependent).
+                    Order for this list doesn't matter.
+
+        The root token should be represented with the string "ROOT"
+
+        Args:
+            sentence: The sentence to be parsed as a list of words.
+                      Your code should not modify the sentence.
+        """
+        # The sentence being parsed is kept for bookkeeping purposes. Do not use it in your code.
+        self.sentence = sentence
+
+        ### YOUR CODE HERE
+        self.stack = ['ROOT']
+        self.buffer = sentence[:]
+        self.dependencies = []
+        ### END YOUR CODE
+        '''
+
+        ---------------Tips on the List[:]---------------
+        When reading, list is a reference to the original list, and list[:] shallow-copies the list.
+
+        When assigning, list (re)binds the name and list[:] slice-assigns, replacing what was previously in the list.
+        '''
+
+    def parse_step(self, transition):
+        """Performs a single parse step by applying the given transition to this partial parse
+
+        Args:
+            transition: A string that equals "S", "LA", or "RA" representing the shift, left-arc,
+                        and right-arc transitions. You can assume the provided transition is a legal
+                        transition.
+        """
+        ### YOUR CODE HERE
+        if transition == 'S' and len(self.buffer) > 0:
+            self.stack.append(self.buffer.pop(0))
+        elif transition == 'LA' and len(self.stack) > 1:
+            dep = (self.stack[-1], self.stack[-2])
+            self.stack.pop(-2)
+            self.dependencies.append(dep)
+        elif transition == 'RA' and len(self.stack) > 1:
+            dep = (self.stack[-2], self.stack[-1])
+            self.stack.pop(-1)
+            self.dependencies.append(dep)
+        ### END YOUR CODE
+
+    def parse(self, transitions):
+        """Applies the provided transitions to this PartialParse
+
+        Args:
+            transitions: The list of transitions in the order they should be applied
+        Returns:
+            dependencies: The list of dependencies produced when parsing the sentence. Represented
+                          as a list of tuples where each tuple is of the form (head, dependent)
+        """
+        for transition in transitions:
+            self.parse_step(transition)
+        return self.dependencies
+
+
+def minibatch_parse(sentences, model, batch_size):
+    """Parses a list of sentences in minibatches using a model.
+
+    Args:
+        sentences: A list of sentences to be parsed (each sentence is a list of words)
+        model: The model that makes parsing decisions. It is assumed to have a function
+               model.predict(partial_parses) that takes in a list of PartialParses as input and
+               returns a list of transitions predicted for each parse. That is, after calling
+                   transitions = model.predict(partial_parses)
+               transitions[i] will be the next transition to apply to partial_parses[i].
+        batch_size: The number of PartialParses to include in each minibatch
+    Returns:
+        dependencies: A list where each element is the dependencies list for a parsed sentence.
+                      Ordering should be the same as in sentences (i.e., dependencies[i] should
+                      contain the parse for sentences[i]).
+    """
+
+    ### YOUR CODE HERE
+    parsers = [PartialParse(s) for s in sentences]
+    feeder = parsers[:]
+
+    batch = [feeder.pop(0) for _ in range(min(batch_size, len(feeder)))]
+    while feeder or batch:
+        transitions = model.predict(batch)
+        for i, pp in enumerate(batch):
+            pp.parse_step(transitions[i])
+            if len(pp.buffer) == 0 and len(pp.stack) == 1:
+                batch.pop(i)
+                if feeder:
+                    batch.append(feeder.pop(0))
+
+    dependencies = [pp.dependencies for pp in parsers]
+    ### END YOUR CODE
+    return dependencies
+
+def get_minibatches(data, minibatch_size, shuffle=True):
+    """
+    Iterates through the provided data one minibatch at at time. You can use this function to
+    iterate through data in minibatches as follows:
+
+        for inputs_minibatch in get_minibatches(inputs, minibatch_size):
+            ...
+
+    Or with multiple data sources:
+
+        for inputs_minibatch, labels_minibatch in get_minibatches([inputs, labels], minibatch_size):
+            ...
+
+    Args:
+        data: there are two possible values:
+            - a list or numpy array
+            - a list where each element is either a list or numpy array
+        minibatch_size: the maximum number of items in a minibatch
+        shuffle: whether to randomize the order of returned data
+    Returns:
+        minibatches: the return value depends on data:
+            - If data is a list/array it yields the next minibatch of data.
+            - If data a list of lists/arrays it returns the next minibatch of each element in the
+              list. This can be used to iterate through multiple data sources
+              (e.g., features and labels) at the same time.
+
+    """
+    list_data = type(data) is list and (type(data[0]) is list or type(data[0]) is np.ndarray)
+    #To test whether the input data is a list of lists/arrays or not
+    data_size = len(data[0]) if list_data else len(data)
+    #To meansure the length of 1st list in the list of lists, or to measure the length of the list of data.
+    indices = np.arange(data_size)
+    if shuffle:
+        np.random.shuffle(indices)
+    for minibatch_start in np.arange(0, data_size, minibatch_size):
+        minibatch_indices = indices[minibatch_start:minibatch_start + minibatch_size]
+        #minibatch_indices is still to calculate the indices for the mini-batch
+        yield [_minibatch(d, minibatch_indices) for d in data] if list_data \
+            else _minibatch(data, minibatch_indices) 
+        # so _minibatch is another funtion defined as below - -
+'''
+---------Grammar on 'yield' expression----------
+yield is a keyword that is used like return, except the function will return a generator.
+Generators are iterators, a kind of iterable you can only iterate over once. 
+Generators do not store all the values in memory, they generate the values on the fly.
+'''
+
+'''
+---------Note on the for loop here------------
+In [13]: for minibatch_start in np.arange(0, 10, 3):
+    ...:         minibatch_indices = indices[minibatch_start: minibatch_start+3]
+    ...:         print(minibatch_indices)
+    ...:         
+[0 1 2]
+[3 4 5]
+[6 7 8]
+[9]
+
+so the last minibatch will have data_size%minibatch_size amount of data
+'''
+
+
+def _minibatch(data, minibatch_idx):
+    return data[minibatch_idx] if type(data) is np.ndarray else [data[i] for i in minibatch_idx]
 
 class Config(object):
     language = 'english'
@@ -122,7 +291,7 @@ class Parser(object):
             p_features = [self.P_NULL] * (3 - len(stack)) + [ex['pos'][x] for x in stack[-3:]]
             p_features += [ex['pos'][x] for x in buf[:3]] + [self.P_NULL] * (3 - len(buf))
 
-        for i in xrange(2):
+        for i in range(2):
             if i < len(stack):
                 k = stack[-i-1]
                 lc = get_lc(k)
@@ -199,10 +368,10 @@ class Parser(object):
 
             # arcs = {(h, t, label)}
             stack = [0]
-            buf = [i + 1 for i in xrange(n_words)]
+            buf = [i + 1 for i in range(n_words)]
             arcs = []
             instances = []
-            for i in xrange(n_words * 2):
+            for i in range(n_words * 2):
                 gold_t = self.get_oracle(stack, buf, ex)
                 if gold_t is None:
                     break
@@ -340,7 +509,7 @@ def minibatches(data, batch_size):
 def load_and_preprocess_data(reduced=True):
     config = Config()
 
-    print "Loading data...",
+    print ("Loading data...",)
     start = time.time()
     train_set = read_conll(os.path.join(config.data_path, config.train_file),
                            lowercase=config.lowercase)
@@ -352,14 +521,14 @@ def load_and_preprocess_data(reduced=True):
         train_set = train_set[:1000]
         dev_set = dev_set[:500]
         test_set = test_set[:500]
-    print "took {:.2f} seconds".format(time.time() - start)
+    print ("took {:.2f} seconds".format(time.time() - start))
 
-    print "Building parser...",
+    print ("Building parser...",)
     start = time.time()
     parser = Parser(train_set)
-    print "took {:.2f} seconds".format(time.time() - start)
+    print ("took {:.2f} seconds".format(time.time() - start))
 
-    print "Loading pretrained embeddings...",
+    print ("Loading pretrained embeddings...",)
     start = time.time()
     word_vectors = {}
     for line in open(config.embedding_file).readlines():
@@ -373,19 +542,19 @@ def load_and_preprocess_data(reduced=True):
             embeddings_matrix[i] = word_vectors[token]
         elif token.lower() in word_vectors:
             embeddings_matrix[i] = word_vectors[token.lower()]
-    print "took {:.2f} seconds".format(time.time() - start)
+    print ("took {:.2f} seconds".format(time.time() - start))
 
-    print "Vectorizing data...",
+    print ("Vectorizing data...",)
     start = time.time()
     train_set = parser.vectorize(train_set)
     dev_set = parser.vectorize(dev_set)
     test_set = parser.vectorize(test_set)
-    print "took {:.2f} seconds".format(time.time() - start)
+    print ("took {:.2f} seconds".format(time.time() - start))
 
-    print "Preprocessing training data...",
+    print ("Preprocessing training data...",)
     start = time.time()
     train_examples = parser.create_instances(train_set)
-    print "took {:.2f} seconds".format(time.time() - start)
+    print ("took {:.2f} seconds".format(time.time() - start))
 
     return parser, embeddings_matrix, train_examples, dev_set, test_set,
 

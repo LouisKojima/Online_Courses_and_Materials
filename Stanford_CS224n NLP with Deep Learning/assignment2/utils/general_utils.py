@@ -41,7 +41,8 @@ def get_minibatches(data, minibatch_size, shuffle=True):
         minibatch_indices = indices[minibatch_start:minibatch_start + minibatch_size]
         #minibatch_indices is still to calculate the indices for the mini-batch
         yield [_minibatch(d, minibatch_indices) for d in data] if list_data \
-            else _minibatch(data, minibatch_indices) # so _minibatch is another funtion defined as below - -
+            else _minibatch(data, minibatch_indices) 
+        # so _minibatch is another funtion defined as below - -
 '''
 ---------Grammar on 'yield' expression----------
 yield is a keyword that is used like return, except the function will return a generator.
@@ -49,6 +50,19 @@ Generators are iterators, a kind of iterable you can only iterate over once.
 Generators do not store all the values in memory, they generate the values on the fly.
 '''
 
+'''
+---------Note on the for loop here------------
+In [13]: for minibatch_start in np.arange(0, 10, 3):
+    ...:         minibatch_indices = indices[minibatch_start: minibatch_start+3]
+    ...:         print(minibatch_indices)
+    ...:         
+[0 1 2]
+[3 4 5]
+[6 7 8]
+[9]
+
+so the last minibatch will have data_size%minibatch_size amount of data
+'''
 
 
 def _minibatch(data, minibatch_idx):

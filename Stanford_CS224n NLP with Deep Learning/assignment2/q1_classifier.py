@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from q1_softmax import softmax
 from q1_softmax import cross_entropy_loss
-from model import Model
+from model import Model # this is bascially to import a class from another module
 from utils.general_utils import get_minibatches
 
 
@@ -141,8 +141,7 @@ class SoftmaxModel(Model):
             train_op: The Op for training.
         """
         ### YOUR CODE HERE
-        op = tf.train.GradientDescentOptimizer(learning_rate = self.config.lr)
-        train_op = op.minimize(loss)
+        train_op = tf.train.GradientDescentOptimizer(learning_rate = self.config.lr).minimize(loss)
         ### END YOUR CODE
         return train_op
 
@@ -158,6 +157,7 @@ class SoftmaxModel(Model):
         """
         n_minibatches, total_loss = 0, 0
         for input_batch, labels_batch in get_minibatches([inputs, labels], self.config.batch_size):
+            #get_minibatches() func is designed to divide a large bunch of data into smaller batches
             n_minibatches += 1
             total_loss += self.train_on_batch(sess, input_batch, labels_batch)
         return total_loss / n_minibatches
