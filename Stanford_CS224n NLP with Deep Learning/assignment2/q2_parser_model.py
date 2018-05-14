@@ -2,10 +2,11 @@ import pickle
 import os
 import time
 import tensorflow as tf
+import sys
 
 from model import Model
 from q2_initialization import xavier_weight_init
-from utils.parser_utils import minibatches, load_and_preprocess_data
+from utils.parser_utils import minibatches, load_and_preprocess_data, Progbar_hand
 from tensorflow.contrib.layers import l2_regularizer
 #from tensorflow.contrib.keras.utils import Progbar
 
@@ -224,11 +225,12 @@ class ParserModel(Model):
 
     def run_epoch(self, sess, parser, train_examples, dev_set):
         n_minibatches = 1 + len(train_examples) / self.config.batch_size
-        prog = tf.keras.utils.Progbar(target=n_minibatches)
+        prog = Progbar_hand(target=n_minibatches)
         for i, (train_x, train_y) in enumerate(minibatches(train_examples, self.config.batch_size)):
             loss = self.train_on_batch(sess, train_x, train_y)
-            prog.update(i + 1, [("train loss", loss)])#, force=(i + 1 == n_minibatches))
-
+            prog.update(i + 1, [("train loss", loss)])
+        print('\n')
+        print (80 * "=")
         print ("Evaluating on dev set",)
         dev_UAS, _ = parser.parse(dev_set)
         print ("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
@@ -252,7 +254,7 @@ class ParserModel(Model):
         self.build()
 
 
-def main(debug=True):
+def main(debug=False):
     print (80 * "=")
     print ("INITIALIZING")
     print (80 * "=")
