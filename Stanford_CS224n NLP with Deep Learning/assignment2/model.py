@@ -16,7 +16,8 @@ class Model(object):
         See for more information:
         https://www.tensorflow.org/versions/r0.7/api_docs/python/io_ops.html#placeholders
         """
-        raise NotImplementedError("Each Model must re-implement this method.")
+        self =  tf.placeholder(tf.float32)
+        #raise NotImplementedError("Each Model must re-implement this method.")
 
     def create_feed_dict(self, inputs_batch, labels_batch=None):
         """Creates the feed_dict for one step of training.
@@ -73,7 +74,6 @@ class Model(object):
         Returns:
             train_op: The Op for training.
         """
-
         raise NotImplementedError("Each Model must re-implement this method.")
 
     def train_on_batch(self, sess, inputs_batch, labels_batch):
