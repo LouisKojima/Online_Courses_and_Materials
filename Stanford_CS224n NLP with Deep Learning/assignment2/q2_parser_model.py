@@ -2,7 +2,7 @@ import pickle
 import os
 import time
 import tensorflow as tf
-import sys
+
 
 from model import Model
 from q2_initialization import xavier_weight_init
@@ -226,12 +226,15 @@ class ParserModel(Model):
     def run_epoch(self, sess, parser, train_examples, dev_set):
         n_minibatches = 1 + len(train_examples) / self.config.batch_size
         prog = Progbar_hand(target=n_minibatches)
+        #prog = tf.keras.utils.Progbar(target = n_minibatches)
         for i, (train_x, train_y) in enumerate(minibatches(train_examples, self.config.batch_size)):
             loss = self.train_on_batch(sess, train_x, train_y)
             prog.update(i + 1, [("train loss", loss)])
+        
         print('\n')
         print (80 * "=")
         print ("Evaluating on dev set",)
+        
         dev_UAS, _ = parser.parse(dev_set)
         print ("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
         return dev_UAS
