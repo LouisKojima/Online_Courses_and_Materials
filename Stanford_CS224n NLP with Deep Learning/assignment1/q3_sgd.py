@@ -30,7 +30,7 @@ def load_saved_params():
         return st, None, None
 
 '''
-这个地方是真滴恶心。。the mode 'w+b' opens and truncates the file to 0 bytes, while
+。。。the mode 'w+b' opens and truncates the file to 0 bytes, while
 'r+b' opens the file without truncation，我之前写的是open(..'wb'),所以就他妈一直报错。。。
 '''
 
@@ -40,8 +40,7 @@ def save_params(iter, params):
         pickle.dump(random.getstate(), f)
 
 
-def sgd(f, x0, step, iterations, postprocessing=None, useSaved=False,
-        PRINT_EVERY=10):
+def sgd(f, x0, step, iterations, postprocessing=None, useSaved=False, PRINT_EVERY=10):
     """ Stochastic Gradient Descent
 
     Implement the stochastic gradient descent method in this function.
@@ -78,6 +77,8 @@ def sgd(f, x0, step, iterations, postprocessing=None, useSaved=False,
 
     x = x0
 
+
+    # I don't get the idea on the reason to do postprocessing
     if not postprocessing:
         postprocessing = lambda x: x
 
@@ -112,7 +113,8 @@ def sgd(f, x0, step, iterations, postprocessing=None, useSaved=False,
 
 
 def sanity_check():
-    quad = lambda x: (np.sum(x ** 2), x * 2) # to calculate the quadratic form
+    quad = lambda x: (np.sum(x ** 2), x * 2) 
+    # to calculate the cost and gradient for the quadratic function
 
     print ("Running sanity checks...")
     t1 = sgd(quad, 0.5, 0.01, 1000, PRINT_EVERY=100)
